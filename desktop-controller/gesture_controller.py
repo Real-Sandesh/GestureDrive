@@ -39,7 +39,7 @@ MODEL_URL = (
 
 MODEL_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "hand_landmarker.task"
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "hand_landmarker.task")
 )
 
 
