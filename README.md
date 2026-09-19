@@ -9,15 +9,14 @@ GestureDrive is a browser-based 3D driving game that uses real-time hand gesture
 - Real-time hand tracking
 - Keyboard controls
 - Interactive driving environment
-- Python desktop gesture controller
-- MediaPipe hand tracking
+- Optional local Python gesture controller
 
 ## Technologies
 
 - HTML, CSS and JavaScript
 - Three.js
 - MediaPipe
-- Python
+- Python (local controller)
 - OpenCV
 - NumPy
 - PySide6
@@ -28,41 +27,42 @@ GestureDrive is a browser-based 3D driving game that uses real-time hand gesture
 
 ```text
 GestureDrive/
-├── desktop-controller/
-│   ├── main.py
-│   └── hand_landmarker.task
 ├── index.html
-├── requirements.txt
+├── desktop-controller/
+│   ├── gesture_controller.py
+│   ├── hand_landmarker.task
+│   └── requirements.txt
 ├── install.bat
 ├── run.bat
 ├── .gitignore
 └── README.md
 ```
 
-The browser game is the part deployed to Vercel. The Python controller is a separate local Windows component and is not executed by Vercel.
-
 ## Run the Browser Game
 
-The web version is a static HTML/JavaScript application.
+The browser game is a static HTML/JavaScript application.
 
-You can open `index.html` in a modern browser and allow camera access when prompted.
+Open `index.html` in a modern browser and allow camera access when prompted.
 
-For deployment, the project can be connected directly to Vercel. No Node.js build step is required.
+### Deploy to Vercel
 
-### Vercel settings
+This repository is intentionally configured as a static website. There is no Node.js build step and no Python serverless function.
+
+Use these Vercel settings:
 
 ```text
 Framework Preset: Other
 Build Command: None
 Output Directory: .
 Install Command: None
+Root Directory: .
 ```
 
-The project does not require a `vercel.json`.
+Do not configure the Python controller as a Vercel Function. It is a local desktop application and is not required for hosting the browser game.
 
-## Run the Python Controller
+## Run the Local Python Controller
 
-The Python controller is intended to run locally on Windows.
+The Python controller is intended for a local Windows environment.
 
 Create a virtual environment:
 
@@ -76,29 +76,27 @@ Activate it:
 .venv\Scripts\activate
 ```
 
-Install dependencies:
+Install its dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -r desktop-controller/requirements.txt
 ```
 
-Run the controller:
+Run it:
 
 ```bash
-python desktop-desktop-controller/gesture_controller.py
+python desktop-controller/gesture_controller.py
 ```
 
-You can also use the included `install.bat` and `run.bat` files.
+The included `install.bat` and `run.bat` files can also be used on Windows.
 
 ## Environment Variables
 
-GestureDrive does not currently require any environment variables or API keys.
+No environment variables or API keys are currently required.
 
 ## GitHub
 
-The repository intentionally does not include local development environments such as `.venv` or Python cache files.
-
-Before committing, make sure files such as these remain ignored:
+Do not commit local development environments or generated files such as:
 
 ```text
 .venv/
@@ -108,11 +106,13 @@ dist/
 build/
 ```
 
+These are covered by `.gitignore`.
+
 ## Notes
 
-The browser version and Python controller are separate parts of the project.
+The browser game and Python controller are separate components.
 
-Vercel hosts the browser game as a static website. The Python controller requires a local Windows environment with access to the required hardware and Python dependencies.
+Vercel hosts the browser game as a static website. The Python controller requires a local Windows environment and is not executed by Vercel.
 
 ## Future Improvements
 

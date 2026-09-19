@@ -1,4 +1,4 @@
-# Python
+# Python local development
 .venv/
 venv/
 env/
@@ -15,11 +15,9 @@ __pycache__/
 dist/
 build/
 
-# Editors
+# Editors and OS files
 .vscode/
 .idea/
-
-# OS files
 .DS_Store
 Thumbs.db
 
