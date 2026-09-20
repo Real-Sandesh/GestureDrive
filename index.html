@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Gesture Drive - Open World</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #9fd3f5;
                font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; color: #fff; }
@@ -63,7 +63,7 @@
   #nitroWrap { display: flex; flex-direction: column; align-items: center; width: 130px; }
   #nitroLabel { font-size: 9px; letter-spacing: 1.5px; opacity: .55; margin-bottom: 3px; }
   #nitroTrack { width: 100%; height: 8px; border-radius: 4px; background: rgba(255,255,255,.08); overflow: hidden; }
-  #nitroFill { height: 100%; width: 100%; background: #19b8ff; transition: width .08s linear; }
+  #nitroFill { height: 100%; width: 100%; background: #19b8ff; transform-origin: left center; transition: transform .08s linear; }
   #boostText { font-size: 10px; opacity: .6; letter-spacing: 1.5px; margin-top: 3px; }
   #wheel {
     width: 34px; height: 34px; border: 4px solid #ddd; border-radius: 50%;
@@ -139,6 +139,46 @@
   .settingsRow span.val { min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; opacity: .8; font-size: 12px; }
   #settingsBtns { display: flex; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
   #settingsBtns button { font-size: 14px; padding: 10px 16px; }
+
+  /* --- touch / small-screen polish --- */
+  html, body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  button, input, select { touch-action: manipulation; }
+  #settingsBox { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .settingsRow select { flex: 1.6; min-width: 0; font: inherit; font-size: 14px; color: #fff; background: #2b3444;
+                        border: 1px solid rgba(255,255,255,.18); border-radius: 8px; padding: 7px 8px; }
+  .settingsHint { margin: -4px 0 8px; font-size: 11px; line-height: 1.4; opacity: .55; }
+  .settingsHint:empty { display: none; }
+  #fpsBadge { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 3px 10px; border-radius: 8px;
+              background: rgba(0,0,0,.5); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+              display: none; pointer-events: none; }
+  /* lowfx = phones / Low quality: no live blur behind the HUD. Re-blurring over a moving 3D scene every frame is very costly on mobile GPUs. */
+  body.lowfx .panel, body.lowfx #bottomCenter, body.lowfx #btnGear { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  body.lowfx .panel { background: rgba(0,0,0,.55); }
+  body.lowfx #bottomCenter { background: rgba(20,22,28,.9); }
+  body.lowfx #rpmBar, body.lowfx #nitroFill { transition: none; }
+  @media (hover: none) {
+    button:hover { background: #2f7df6; }
+    button.alt:hover { background: #4b5563; }
+    #btnGear:hover { background: rgba(0,0,0,.45); }
+  }
+  @media (pointer: coarse) {
+    .settingsRow input[type="checkbox"] { width: 24px; height: 24px; }
+    .settingsRow input[type="range"] { min-height: 32px; }
+  }
+  /* phones held sideways: keep both dialogs on screen */
+  @media (max-height: 520px) {
+    #settingsBox { padding: 14px 22px; max-height: 94vh; }
+    #settingsBox h2 { margin-bottom: 8px; font-size: 20px; }
+    #settingsBox h3 { margin: 10px 0 4px; padding-top: 8px; }
+    .settingsRow { margin: 6px 0; }
+    #settingsBtns { margin-top: 12px; }
+    #settingsBtns button { padding: 8px 12px; margin: 3px; }
+    #menuBox { padding: 14px 22px; max-height: 92vh; overflow-y: auto; }
+    #menuBox h1 { font-size: 26px; }
+    #menuBox p { margin: 4px 0; }
+    #menuBox ul { margin: 6px auto; line-height: 1.45; }
+    button { padding: 10px 16px; }
+  }
 </style>
 </head>
 <body>
@@ -180,6 +220,7 @@
     <div id="gstatus">Camera off</div>
   </div>
 
+  <div id="fpsBadge"></div>
   <button id="btnGear" title="Settings (Esc)">⚙️</button>
 </div>
 
@@ -220,9 +261,27 @@
       <input type="checkbox" id="camToggle" checked>
     </div>
 
+    <h3>Graphics</h3>
+    <div class="settingsRow">
+      <label for="qualitySelect">🎨 Quality</label>
+      <select id="qualitySelect">
+        <option value="auto">Auto</option>
+        <option value="low">Low (fastest)</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+    <div class="settingsHint" id="qualityHint"></div>
+    <div class="settingsRow">
+      <label for="fpsToggle">📊 Show FPS</label>
+      <input type="checkbox" id="fpsToggle">
+    </div>
+
     <div id="settingsBtns">
       <button id="btnResume">▶️ Resume</button>
       <button id="btnRestartCar" class="alt">🔄 Reset car</button>
+      <button id="btnFull" class="alt">📺 Fullscreen</button>
+      <button id="btnDefaults" class="alt">↺ Defaults</button>
       <button id="btnQuitMenu" class="alt">🏠 Main menu</button>
     </div>
   </div>
@@ -283,8 +342,11 @@ const prefs = {
   steerSensitivity: 100, // 50-200 %, higher = less hand tilt needed to steer
   gestureSensitivity: 100, // 50-200 %, higher = easier to trigger gas/brake
   autoAccel: false,
-  showCam: true
+  showCam: true,
+  quality: 'auto',       // auto | low | medium | high
+  showFps: false
 };
+const DEFAULT_PREFS = Object.assign({}, prefs);
 
 function loadPrefs() {
   try {
@@ -293,13 +355,25 @@ function loadPrefs() {
     const saved = JSON.parse(raw);
     Object.assign(prefs, saved);
   } catch (e) { /* ignore bad/missing storage */ }
+  if (['auto', 'low', 'medium', 'high'].indexOf(prefs.quality) < 0) prefs.quality = 'auto';
 }
-function savePrefs() {
+// localStorage writes are synchronous and slow on phones. Sliders fire dozens of
+// events per second, so writes are debounced and flushed when the page is hidden.
+let prefsTimer = 0;
+function writePrefs() {
+  prefsTimer = 0;
   try {
     prefs.volume = Math.round((audio.muted ? prefs.volume : audio.volume * 100));
     prefs.muted = audio.muted;
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch (e) { /* storage unavailable, ignore */ }
+}
+function savePrefs() {
+  if (prefsTimer) clearTimeout(prefsTimer);
+  prefsTimer = setTimeout(writePrefs, 400);
+}
+function flushPrefs() {
+  if (prefsTimer) { clearTimeout(prefsTimer); writePrefs(); }
 }
 
 function applySteerSensitivity(pct) {
@@ -326,22 +400,82 @@ const clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
 const state = { playing: false, paused: false };
 const keys = {};
 
+// --- Mobile performance preset -------------------------------------------
+// Phones have far less GPU fill-rate and CPU headroom than a desktop, so we
+// dial back render resolution, draw distance, world detail, traffic count,
+// and how often we run hand-tracking inference when we detect one.
+const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent) ||
+                  (navigator.maxTouchPoints > 1 && window.matchMedia && matchMedia('(pointer: coarse)').matches);
+
+// Saved settings are read first because the graphics preset depends on them.
+loadPrefs();
+
+// One table of quality presets. Q holds whichever is active and is mutated in
+// place (applyQuality) so every function that reads Q sees changes instantly.
+const QUALITY = {
+  low: {
+    pixelRatioCap: 1,          // render at 1x CSS pixels instead of the phone's native 2-3x
+    antialias: false,          // MSAA is expensive on mobile GPUs
+    view: 1,                   // 3x3 chunk grid instead of 5x5
+    fogNear: 55, fogFar: 190,  // hides the shorter draw distance
+    trafficCars: 5,
+    treeMult: 0.55,
+    simpleBuildings: true,     // skip AC units / water tanks / antennas
+    simpleRamps: true,         // skip glow layer + extra chevrons
+    spotlight: false,          // headlight SpotLight adds per-vertex cost on every mesh
+    frameIntervalMs: isMobile ? 1000 / 30 : 1000 / 60,
+    minimapIntervalMs: 100, hudIntervalMs: 50, skyIntervalMs: 100, gestureIntervalMs: 70,
+    camWidth: 320, camHeight: 240, camFPS: 15,
+    lowfx: true                // no backdrop-filter blur on the HUD
+  },
+  medium: {
+    pixelRatioCap: 1.5, antialias: false, view: 1, fogNear: 70, fogFar: 200, trafficCars: 7, treeMult: 0.8,
+    simpleBuildings: false, simpleRamps: true, spotlight: true,
+    frameIntervalMs: 1000 / 60,
+    minimapIntervalMs: 50, hudIntervalMs: 33, skyIntervalMs: 50, gestureIntervalMs: 40,
+    camWidth: 480, camHeight: 360, camFPS: 24,
+    lowfx: isMobile
+  },
+  high: {
+    pixelRatioCap: 2, antialias: true, view: 2, fogNear: 110, fogFar: 340, trafficCars: 9, treeMult: 1,
+    simpleBuildings: false, simpleRamps: false, spotlight: true,
+    frameIntervalMs: isMobile ? 1000 / 60 : 0,
+    minimapIntervalMs: 0, hudIntervalMs: 0, skyIntervalMs: 0, gestureIntervalMs: 0,
+    camWidth: 640, camHeight: 480, camFPS: 30,
+    lowfx: false
+  }
+};
+function resolveQuality(pref) {
+  if (pref === 'auto') return isMobile ? 'low' : 'high';
+  return QUALITY[pref] ? pref : 'high';
+}
+const Q = Object.assign({}, QUALITY[resolveQuality(prefs.quality)]);
+SETTINGS.trafficCars = Q.trafficCars;
+
 const canvas = $('game');
-const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const rendererAA = Q.antialias;   // MSAA is fixed when the renderer is created
+const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: rendererAA, powerPreference: 'high-performance' });
+function applyPixelRatio() {
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pixelRatioCap));
+}
+applyPixelRatio();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fd3f5);
-scene.fog = new THREE.Fog(0x9fd3f5, 110, 340);
+scene.fog = new THREE.Fog(0x9fd3f5, Q.fogNear, Q.fogFar);
 
 const camera = new THREE.PerspectiveCamera(70, 1, 0.5, 1000);
 const camPos = new THREE.Vector3();
 
+let renderDirty = true;   // paused screen: draw one frame when something changed, otherwise stay idle
+let miniVisible = true;   // the minimap panel is hidden by CSS on narrow screens - don't draw it then
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  miniVisible = !window.matchMedia('(max-width: 900px)').matches;
+  renderDirty = true;
 }
 window.addEventListener('resize', resize);
 resize();
@@ -431,7 +565,6 @@ const stats = { coins: 0, dist: 0, top: 0, jumps: 0 };
 
 const CHUNK = 160;
 const ROAD_W = 16;
-const VIEW = 2;
 
 function mulberry32(a) {
   return function () {
@@ -468,6 +601,13 @@ const geoLeaf  = new THREE.ConeGeometry(1, 1, 8);
 const geoLeafBlob = new THREE.SphereGeometry(1, 8, 6);
 const geoCoin  = new THREE.CylinderGeometry(1, 1, 0.25, 20);
 geoCoin.rotateX(Math.PI / 2);
+// Shared unit shapes for rooftop props: scaled per instance instead of allocating
+// (and never freeing) a fresh geometry for every prop of every building.
+const geoUnitBox = new THREE.BoxGeometry(1, 1, 1);
+const geoUnitCyl = new THREE.CylinderGeometry(1, 1, 1, 12);
+const geoLeg = new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6);
+const geoAntenna = new THREE.CylinderGeometry(0.06, 0.1, 1, 6);
+const geoBall = new THREE.SphereGeometry(0.22, 8, 6);
 
 function makeVariantWindows(variant) {
   const wall = document.createElement('canvas');
@@ -554,7 +694,7 @@ function buildBuilding(rand, bx, bz, w, h, d, isCity) {
   mesh.position.set(0, h / 2, 0);
   pkg.add(mesh);
 
-  const hasStep = rand() < 0.4 && h > 12;
+  const hasStep = !Q.simpleBuildings && rand() < 0.4 && h > 12;
   if (hasStep) {
     const w2 = w * (0.5 + rand() * 0.3);
     const d2 = d * (0.5 + rand() * 0.3);
@@ -566,24 +706,26 @@ function buildBuilding(rand, bx, bz, w, h, d, isCity) {
     pkg.add(m2);
   }
 
-  const acCount = isCity ? (2 + Math.floor(rand() * 3)) : Math.floor(rand() * 2);
+  const acCount = Q.simpleBuildings ? 0 : (isCity ? (2 + Math.floor(rand() * 3)) : Math.floor(rand() * 2));
   for (let i = 0; i < acCount; i++) {
     const acW = 1.2 + rand() * 1.2;
     const acD = 1.2 + rand() * 1.2;
     const acH = 0.8 + rand() * 0.6;
-    const ac = new THREE.Mesh(new THREE.BoxGeometry(acW, acH, acD), matAC);
+    const ac = new THREE.Mesh(geoUnitBox, matAC);
+    ac.scale.set(acW, acH, acD);
     ac.position.set((rand() - 0.5) * (w - acW - 1), h + acH / 2, (rand() - 0.5) * (d - acD - 1));
     pkg.add(ac);
   }
 
-  if (rand() < 0.35 && h > 8) {
+  if (!Q.simpleBuildings && rand() < 0.35 && h > 8) {
     const r = 1.0 + rand() * 0.8;
     const tankH = 1.5 + rand() * 1.2;
-    const tank = new THREE.Mesh(new THREE.CylinderGeometry(r, r, tankH, 12), matWater);
+    const tank = new THREE.Mesh(geoUnitCyl, matWater);
+    tank.scale.set(r, tankH, r);
     tank.position.set((rand() - 0.5) * w * 0.5, h + tankH / 2 + 0.5, (rand() - 0.5) * d * 0.5);
     pkg.add(tank);
     for (let k = 0; k < 4; k++) {
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 6), matMetal);
+      const leg = new THREE.Mesh(geoLeg, matMetal);
       const ang = k * Math.PI / 2 + Math.PI / 4;
       leg.position.set(
         tank.position.x + Math.cos(ang) * r * 0.7, h + 0.3,
@@ -593,12 +735,13 @@ function buildBuilding(rand, bx, bz, w, h, d, isCity) {
     }
   }
 
-  if (isCity && rand() < 0.4) {
+  if (!Q.simpleBuildings && isCity && rand() < 0.4) {
     const antH = 3 + rand() * 5;
-    const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.1, antH, 6), matMetal);
+    const ant = new THREE.Mesh(geoAntenna, matMetal);
+    ant.scale.set(1, antH, 1);
     ant.position.set(0, h + antH / 2, 0);
     pkg.add(ant);
-    const lightBall = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), matRedLt);
+    const lightBall = new THREE.Mesh(geoBall, matRedLt);
     lightBall.position.set(0, h + antH, 0);
     pkg.add(lightBall);
     pkg.userData.blink = lightBall;
@@ -616,20 +759,29 @@ let activeRamps = [];
 const collectedCoins = new Set();
 const dummy = new THREE.Object3D();
 
+const rampGeo = {
+  wedge: new THREE.BoxGeometry(8, 0.5, 12),
+  top:   new THREE.BoxGeometry(7, 0.15, 11),
+  rail:  new THREE.BoxGeometry(0.35, 1.3, 12),
+  strip: new THREE.BoxGeometry(6.5, 0.22, 1.4),
+  glow:  new THREE.BoxGeometry(6.6, 0.06, 1.5),
+  chev:  new THREE.BoxGeometry(6.5, 0.2, 0.5)
+};
+
 function buildRamp(rand, ox, oz, onXRoad) {
   const rampGroup = new THREE.Group();
 
-  const wedge = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 12), matRamp);
+  const wedge = new THREE.Mesh(rampGeo.wedge, matRamp);
   wedge.position.set(0, 0.7, 0);
   wedge.rotation.x = -Math.PI / 10;
   rampGroup.add(wedge);
 
-  const top = new THREE.Mesh(new THREE.BoxGeometry(7, 0.15, 11), matRampTop);
+  const top = new THREE.Mesh(rampGeo.top, matRampTop);
   top.position.set(0, 1.05, 0);
   top.rotation.x = -Math.PI / 10;
   rampGroup.add(top);
 
-  const railL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.3, 12), matDark);
+  const railL = new THREE.Mesh(rampGeo.rail, matDark);
   railL.position.set(-4, 0.7, 0);
   railL.rotation.x = -Math.PI / 10;
   rampGroup.add(railL);
@@ -638,18 +790,21 @@ function buildRamp(rand, ox, oz, onXRoad) {
   rampGroup.add(railR);
 
   for (let s = 0; s < 4; s++) {
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.22, 1.4), matBoostStrip);
+    const strip = new THREE.Mesh(rampGeo.strip, matBoostStrip);
     strip.position.set(0, 1.16, -4 + s * 2.7);
     strip.rotation.x = -Math.PI / 10;
     rampGroup.add(strip);
-    const glow = new THREE.Mesh(new THREE.BoxGeometry(6.6, 0.06, 1.5), matBoostStripGlow);
-    glow.position.set(0, 1.27, -4 + s * 2.7);
-    glow.rotation.x = -Math.PI / 10;
-    rampGroup.add(glow);
+    if (!Q.simpleRamps) {
+      const glow = new THREE.Mesh(rampGeo.glow, matBoostStripGlow);
+      glow.position.set(0, 1.27, -4 + s * 2.7);
+      glow.rotation.x = -Math.PI / 10;
+      rampGroup.add(glow);
+    }
   }
 
-  for (let s = 0; s < 2; s++) {
-    const chev = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.2, 0.5), matDark);
+  const chevronCount = Q.simpleRamps ? 1 : 2;
+  for (let s = 0; s < chevronCount; s++) {
+    const chev = new THREE.Mesh(rampGeo.chev, matDark);
     chev.position.set(0, 1.1, -6 + s * 1.2);
     chev.rotation.x = -Math.PI / 10;
     rampGroup.add(chev);
@@ -669,7 +824,7 @@ function buildChunk(cx, cz) {
   const rand = mulberry32(chunkSeed(cx, cz));
   const group = new THREE.Group();
   const ox = cx * CHUNK, oz = cz * CHUNK;
-  const chunk = { group: group, colliders: [], coins: [], pads: [], ramps: [], ownGeos: [], instanced: [], blinks: [] };
+  const chunk = { group: group, cx: cx, cz: cz, colliders: [], coins: [], pads: [], ramps: [], ownGeos: [], instanced: [], blinks: [] };
 
   const r1 = new THREE.Mesh(geoPlane, matRoad);
   r1.scale.set(CHUNK, 1, ROAD_W);
@@ -723,7 +878,7 @@ function buildChunk(cx, cz) {
     }
   }
 
-  const treeCount = isForest ? 34 : (isCity ? 4 : 12);
+  const treeCount = Math.round((isForest ? 34 : (isCity ? 4 : 12)) * Q.treeMult);
   const trunks = new THREE.InstancedMesh(geoTrunk, matTrunk, treeCount);
   const leavesA = new THREE.InstancedMesh(geoLeaf, matLeaf, treeCount);
   const leavesB = new THREE.InstancedMesh(geoLeafBlob, matLeaf2, treeCount);
@@ -822,23 +977,49 @@ function rebuildLists() {
   });
 }
 
+// Streaming: only re-plan when the car enters a new chunk, and build at most ONE
+// new chunk per frame (nearest first) so crossing a boundary doesn't cause a
+// multi-chunk hitch on phones. force = build everything right now.
+const buildQueue = [];
+let streamCX = null, streamCZ = null;
+
+function clearChunks() {
+  chunks.forEach(function (ch) { removeChunk(ch); });
+  chunks.clear();
+  buildQueue.length = 0;
+  streamCX = streamCZ = null;
+}
+
 function updateChunks(force) {
   const ccx = Math.floor(car.x / CHUNK), ccz = Math.floor(car.z / CHUNK);
+  if (!force && ccx === streamCX && ccz === streamCZ && !buildQueue.length) return;
+  const V = Q.view;
   let changed = !!force;
-  for (let dx = -VIEW; dx <= VIEW; dx++) {
-    for (let dz = -VIEW; dz <= VIEW; dz++) {
-      const key = (ccx + dx) + ',' + (ccz + dz);
-      if (!chunks.has(key)) { chunks.set(key, buildChunk(ccx + dx, ccz + dz)); changed = true; }
+
+  if (force || ccx !== streamCX || ccz !== streamCZ) {
+    streamCX = ccx; streamCZ = ccz;
+    chunks.forEach(function (ch, key) {
+      if (Math.abs(ch.cx - ccx) > V || Math.abs(ch.cz - ccz) > V) {
+        removeChunk(ch);
+        chunks.delete(key);
+        changed = true;
+      }
+    });
+    buildQueue.length = 0;
+    for (let dx = -V; dx <= V; dx++) {
+      for (let dz = -V; dz <= V; dz++) {
+        const key = (ccx + dx) + ',' + (ccz + dz);
+        if (!chunks.has(key)) buildQueue.push({ cx: ccx + dx, cz: ccz + dz, key: key, d: dx * dx + dz * dz });
+      }
     }
+    buildQueue.sort(function (a, b) { return a.d - b.d; });
   }
-  chunks.forEach(function (ch, key) {
-    const parts = key.split(',');
-    if (Math.abs(parseInt(parts[0], 10) - ccx) > VIEW || Math.abs(parseInt(parts[1], 10) - ccz) > VIEW) {
-      removeChunk(ch);
-      chunks.delete(key);
-      changed = true;
-    }
-  });
+
+  let budget = force ? Infinity : 1;
+  while (buildQueue.length && budget-- > 0) {
+    const job = buildQueue.shift();
+    if (!chunks.has(job.key)) { chunks.set(job.key, buildChunk(job.cx, job.cz)); changed = true; }
+  }
   if (changed) rebuildLists();
 }
 
@@ -865,13 +1046,19 @@ function respawnTraffic(t) {
   t.speed = 9 + Math.random() * 12;
 }
 
-function initTraffic() {
-  for (let i = 0; i < SETTINGS.trafficCars; i++) {
-    const mesh = makeCar(trafficColors[i % trafficColors.length]);
+function syncTrafficCount() {
+  const want = Q.trafficCars;
+  while (traffic.length < want) {
+    const mesh = makeCar(trafficColors[traffic.length % trafficColors.length]);
     scene.add(mesh);
     const t = { mesh: mesh, x: 0, z: 0, heading: 0, speed: 10, axis: 'z', dir: 1 };
     respawnTraffic(t);
     traffic.push(t);
+  }
+  while (traffic.length > want) {
+    const t = traffic.pop();
+    scene.remove(t.mesh);
+    t.mesh.children[0].material.dispose();   // body has its own colour material
   }
 }
 
@@ -1012,6 +1199,16 @@ function updateAudio(input) {
   audio.wind.g.gain.setTargetAtTime(Math.pow(sp / SETTINGS.maxSpeed, 2) * 0.09, t, 0.1);
   audio.horn.gain.setTargetAtTime(keys.KeyH ? 0.05 : 0, t, 0.01);
 }
+// updateAudio only runs while driving, so without this the engine drone (and
+// skid/wind/horn) would keep playing at its last level on the pause and main menus.
+function silenceAudio() {
+  if (!audio.ctx) return;
+  const t = audio.ctx.currentTime;
+  audio.eng.gain.gain.setTargetAtTime(0, t, 0.05);
+  audio.skid.g.gain.setTargetAtTime(0, t, 0.05);
+  audio.wind.g.gain.setTargetAtTime(0, t, 0.05);
+  audio.horn.gain.setTargetAtTime(0, t, 0.02);
+}
 
 const sky = { t: 0.22 };
 const COL_DAY = new THREE.Color(0x9fd3f5), COL_NIGHT = new THREE.Color(0x0a1030), COL_DUSK = new THREE.Color(0xf2a172);
@@ -1028,7 +1225,7 @@ function updateSky(dt) {
   scene.background.copy(tmpCol);
   scene.fog.color.copy(tmpCol);
   const night = 1 - daylight;
-  scene.fog.far = 340 - 90 * night;
+  scene.fog.far = Q.fogFar * (1 - 0.265 * night);
   hemi.intensity = 0.22 + 0.73 * daylight;
   sun.intensity = 0.05 + 0.70 * daylight;
   const glow = clamp(night * 1.5 - 0.2, 0, 1);
@@ -1103,6 +1300,7 @@ function collide() {
   let impact = 0;
   for (let i = 0; i < colliders.length; i++) {
     const c = colliders[i];
+    if (Math.abs(car.x - c.x) > 32 || Math.abs(car.z - c.z) > 32) continue;   // far away: skip the maths
     if (c.r === undefined && car.y > 3) continue;
     if (c.r !== undefined && car.y > 2) continue;
     let dx, dz, dist, minDist;
@@ -1195,7 +1393,7 @@ const HAND_LINES = [
 ];
 
 const gesture = {
-  landmarker: null, video: null, on: false, lastTime: -1,
+  landmarker: null, video: null, on: false, lastTime: -1, lastDetect: 0,
   hands: 0, steer: 0, gas: 0, brake: 0, lastBoth: 0, angleDeg: 0
 };
 
@@ -1258,6 +1456,8 @@ function updateGesture(now) {
   if (!gesture.on || !gesture.landmarker || !v || v.readyState < 2) return;
   if (v.currentTime === gesture.lastTime) return;
   gesture.lastTime = v.currentTime;
+  if (Q.gestureIntervalMs && now - gesture.lastDetect < Q.gestureIntervalMs) return;
+  gesture.lastDetect = now;
   let result;
   try { result = gesture.landmarker.detectForVideo(v, now); } catch (e) { return; }
   const hands = (result && result.landmarks) || [];
@@ -1282,7 +1482,7 @@ function updateGesture(now) {
 async function startHandTracking(setMsg) {
   setMsg('Waiting for camera permission... click Allow.');
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 }, facingMode: 'user' },
+    video: { width: { ideal: Q.camWidth }, height: { ideal: Q.camHeight }, frameRate: { ideal: Q.camFPS }, facingMode: 'user' },
     audio: false
   });
   const v = $('camVideo');
@@ -1337,16 +1537,23 @@ function syncSettingsUI() {
   $('autoToggleSettings').checked = prefs.autoAccel;
   $('auto').checked = prefs.autoAccel;
   $('camToggle').checked = prefs.showCam;
+  $('qualitySelect').value = prefs.quality;
+  $('fpsToggle').checked = prefs.showFps;
+  updateQualityHint();
 }
 function openSettings() {
-  if (!state.playing) return;
+  if (!state.playing || state.paused) return;
   state.paused = true;
+  silenceAudio();
   syncSettingsUI();
   $('settingsMenu').style.display = 'flex';
 }
 function closeSettings() {
   $('settingsMenu').style.display = 'none';
-  state.paused = false;
+  if (state.paused) { state.paused = false; lastT = performance.now(); }
+  if (audio.ctx && audio.ctx.state === 'suspended' && audio.ctx.resume) audio.ctx.resume();
+  flushPrefs();
+  renderDirty = true;
 }
 
 $('btnGear').addEventListener('click', function () {
@@ -1356,6 +1563,8 @@ $('btnResume').addEventListener('click', closeSettings);
 $('btnRestartCar').addEventListener('click', function () { resetCar(); closeSettings(); });
 $('btnQuitMenu').addEventListener('click', function () {
   closeSettings();
+  silenceAudio();
+  releaseWakeLock();
   state.playing = false;
   $('hud').style.display = 'none';
   $('menu').style.display = 'flex';
@@ -1392,9 +1601,102 @@ $('auto').addEventListener('change', function () { setAutoAccel(this.checked); }
 
 $('camToggle').addEventListener('change', function () {
   prefs.showCam = this.checked;
-  $('bottomLeft').style.display = this.checked ? '' : 'none';
+  $('bottomLeft').style.display = (this.checked && gesture.on) ? '' : 'none';
   savePrefs();
 });
+
+function updateQualityHint() {
+  const level = resolveQuality(prefs.quality);
+  const names = { low: 'Low', medium: 'Medium', high: 'High' };
+  let t = prefs.quality === 'auto' ? 'Auto picked ' + names[level] + ' for this device. ' : '';
+  if (QUALITY[level].antialias !== Q.antialias) t += 'Anti-aliasing only changes after a page reload.';
+  $('qualityHint').textContent = t;
+}
+
+// Applies a preset live. Everything except MSAA can change without a reload.
+function applyQuality(pref, initial) {
+  prefs.quality = pref;
+  const old = { treeMult: Q.treeMult, simpleBuildings: Q.simpleBuildings, simpleRamps: Q.simpleRamps };
+  Object.assign(Q, QUALITY[resolveQuality(pref)]);
+  Q.antialias = rendererAA;
+  document.body.classList.toggle('lowfx', !!Q.lowfx);
+  scene.fog.near = Q.fogNear;
+  scene.fog.far = Q.fogFar;
+  headlight.visible = !!Q.spotlight;
+  SETTINGS.trafficCars = Q.trafficCars;
+  syncTrafficCount();
+  applyPixelRatio();
+  resize();
+  skyAccum = 0; hudAccum = 0;
+  if (!initial) {
+    if (old.treeMult !== Q.treeMult || old.simpleBuildings !== Q.simpleBuildings || old.simpleRamps !== Q.simpleRamps) clearChunks();
+    updateChunks(true);
+  }
+  updateQualityHint();
+}
+
+$('qualitySelect').addEventListener('change', function () {
+  applyQuality(this.value);
+  savePrefs();
+});
+$('fpsToggle').addEventListener('change', function () {
+  prefs.showFps = this.checked;
+  $('fpsBadge').style.display = this.checked ? 'block' : 'none';
+  savePrefs();
+});
+
+const rootEl = document.documentElement;
+if (!rootEl.requestFullscreen) $('btnFull').style.display = 'none';   // e.g. iPhone Safari has no fullscreen API
+$('btnFull').addEventListener('click', function () {
+  let p;
+  if (!document.fullscreenElement) p = rootEl.requestFullscreen();
+  else if (document.exitFullscreen) p = document.exitFullscreen();
+  if (p && p.catch) p.catch(function () {});
+});
+
+$('btnDefaults').addEventListener('click', function () {
+  applySteerSensitivity(DEFAULT_PREFS.steerSensitivity);
+  applyGestureSensitivity(DEFAULT_PREFS.gestureSensitivity);
+  setVolume(DEFAULT_PREFS.volume / 100);
+  setMuted(false);
+  setAutoAccel(DEFAULT_PREFS.autoAccel);
+  prefs.showCam = DEFAULT_PREFS.showCam;
+  $('bottomLeft').style.display = (prefs.showCam && gesture.on) ? '' : 'none';
+  prefs.showFps = DEFAULT_PREFS.showFps;
+  $('fpsBadge').style.display = 'none';
+  applyQuality(DEFAULT_PREFS.quality);
+  syncSettingsUI();
+  savePrefs();
+});
+
+// Keep the screen awake: a gesture-controlled game never touches the screen, so phones would dim and lock.
+let wakeLock = null;
+function requestWakeLock() {
+  if (wakeLock || !state.playing || document.hidden || !navigator.wakeLock) return;
+  navigator.wakeLock.request('screen').then(function (l) {
+    wakeLock = l;
+    l.addEventListener('release', function () { if (wakeLock === l) wakeLock = null; });
+  }).catch(function () {});
+}
+function releaseWakeLock() {
+  if (!wakeLock) return;
+  const l = wakeLock;
+  wakeLock = null;
+  l.release().catch(function () {});
+}
+
+// Leaving the tab/app pauses the game, stops audio and saves settings.
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) {
+    openSettings();
+    if (audio.ctx && audio.ctx.suspend) audio.ctx.suspend();
+    flushPrefs();
+  } else {
+    if (audio.ctx && audio.ctx.resume) audio.ctx.resume();
+    requestWakeLock();
+  }
+});
+window.addEventListener('pagehide', flushPrefs);
 
 function readInput(now) {
   updateGesture(now);
@@ -1406,46 +1708,46 @@ function readInput(now) {
   if (keys.KeyW || keys.ArrowUp) gas = 1;
   if (keys.KeyS || keys.ArrowDown) brake = 1;
   if (keys.Space) brake = 1;
-  if ($('auto').checked && !brake && car.speed < 30) gas = 1;
+  if (prefs.autoAccel && !brake && car.speed < 30) gas = 1;
   return { steer: steer, gas: gas, brake: brake };
 }
 
-let lastDistShown = -1;
-let lastSpeedShown = -1;
-let lastGearShown = -1;
-let lastRpmShown = -1;
-let lastJumpsShown = -1;
+// HUD: every write is cached, so the DOM is only touched when a value actually changes
+// (each write can force layout/paint of the panels sitting on top of the 3D canvas).
+const HUD = {};
+['speed', 'gear', 'rpmBar', 'nitroFill', 'boostText', 'pGas', 'pBrake', 'pBoost', 'wheel', 'coins', 'top', 'jumps', 'dist']
+  .forEach(function (id) { HUD[id] = $(id); });
+const hudLast = {};
+function hudText(id, v) { if (hudLast[id] !== v) { hudLast[id] = v; HUD[id].textContent = v; } }
+function hudOn(id, on) { if (hudLast[id] !== on) { hudLast[id] = on; HUD[id].classList.toggle('on', on); } }
 
 function updateHUD(input) {
-  const kmh = Math.round(Math.abs(car.speed) * 3.6);
-  if (kmh !== lastSpeedShown) { $('speed').textContent = kmh; lastSpeedShown = kmh; }
-
   const sp = Math.abs(car.speed);
+  hudText('speed', Math.round(sp * 3.6));
+
   let gear = 0;
   while (gear < GEAR_TOP.length - 1 && sp > GEAR_TOP[gear]) gear++;
-  if (gear !== lastGearShown) {
-    lastGearShown = gear;
-    $('gear').textContent = (car.speed < -0.5) ? 'R' : (Math.abs(car.speed) < 0.5 ? 'N' : (gear + 1));
-  }
+  hudText('gear', car.speed < -0.5 ? 'R' : (sp < 0.5 ? 'N' : String(gear + 1)));
+
   const lo = gear ? GEAR_TOP[gear - 1] : 0, hi = GEAR_TOP[gear];
-  const rpm = clamp((sp - lo) / (hi - lo), 0, 1);
-  const rpmPct = Math.round(rpm * 100);
-  if (rpmPct !== lastRpmShown) { $('rpmBar').style.width = rpmPct + '%'; lastRpmShown = rpmPct; }
+  const rpmPct = Math.round(clamp((sp - lo) / (hi - lo), 0, 1) * 100);
+  if (hudLast.rpm !== rpmPct) { hudLast.rpm = rpmPct; HUD.rpmBar.style.width = rpmPct + '%'; }
 
-  const npct = clamp(boost.t / 2.4, 0, 1) * 100;
-  $('nitroFill').style.width = npct + '%';
-  $('boostText').textContent = boost.t > 0 ? 'ACTIVE' : (Math.abs(car.speed) > 5 ? 'READY' : 'IDLE');
+  const npct = Math.round(clamp(boost.t / 2.4, 0, 1) * 100);
+  if (hudLast.nitro !== npct) { hudLast.nitro = npct; HUD.nitroFill.style.transform = 'scaleX(' + (npct / 100) + ')'; }
+  hudText('boostText', boost.t > 0 ? 'ACTIVE' : (sp > 5 ? 'READY' : 'IDLE'));
 
-  $('pGas').classList.toggle('on', input.gas > 0);
-  $('pBrake').classList.toggle('on', input.brake > 0);
-  $('pBoost').classList.toggle('on', boost.t > 0);
-  $('wheel').style.transform = 'rotate(' + (car.steer * 85) + 'deg)';
+  hudOn('pGas', input.gas > 0);
+  hudOn('pBrake', input.brake > 0);
+  hudOn('pBoost', boost.t > 0);
 
-  $('coins').textContent = stats.coins;
-  $('top').textContent = Math.round(stats.top * 3.6);
-  if (stats.jumps !== lastJumpsShown) { $('jumps').textContent = stats.jumps; lastJumpsShown = stats.jumps; }
-  const d = Math.floor(stats.dist / 100) / 10;
-  if (d !== lastDistShown) { $('dist').textContent = d.toFixed(1); lastDistShown = d; }
+  const wdeg = Math.round(car.steer * 85 / 2) * 2;
+  if (hudLast.wheel !== wdeg) { hudLast.wheel = wdeg; HUD.wheel.style.transform = 'rotate(' + wdeg + 'deg)'; }
+
+  hudText('coins', stats.coins);
+  hudText('top', Math.round(stats.top * 3.6));
+  hudText('jumps', stats.jumps);
+  hudText('dist', (Math.floor(stats.dist / 100) / 10).toFixed(1));
 }
 
 function drawStar(g, x, y, r, points, fill, stroke) {
@@ -1471,6 +1773,16 @@ function drawStar(g, x, y, r, points, fill, stroke) {
 }
 
 let cloudOffset = 0;
+// Fixed puff layout: the old code called Math.random() every redraw, so the clouds flickered.
+const CLOUD_PUFFS = [];
+(function () {
+  const r = mulberry32(2024);
+  for (let c = 0; c < 2; c++) {
+    const arr = [];
+    for (let i = 0; i < 5; i++) arr.push([r() - 0.5, r() - 0.5, 0.4 + r() * 0.4]);
+    CLOUD_PUFFS.push(arr);
+  }
+})();
 function drawClouds(g, c, c2, R) {
   cloudOffset += 0.15;
   const t = (performance.now() / 1000);
@@ -1478,15 +1790,16 @@ function drawClouds(g, c, c2, R) {
     {x: c + Math.cos(t * 0.25) * (R * 0.35), y: c2 + R * 0.45, s: R * 0.30, a: 0.22},
     {x: c - R * 0.3 + Math.sin(t * 0.18) * 20, y: c2 + R * 0.55, s: R * 0.22, a: 0.15}
   ];
-  clouds.forEach(function (cl) {
+  clouds.forEach(function (cl, idx) {
     const grad = g.createRadialGradient(cl.x, cl.y, 0, cl.x, cl.y, cl.s);
     grad.addColorStop(0, 'rgba(220,220,230,' + cl.a + ')');
     grad.addColorStop(1, 'rgba(220,220,230,0)');
     g.fillStyle = grad;
     for (let i = 0; i < 5; i++) {
-      const bx = cl.x + (Math.random() - 0.5) * cl.s * 0.9;
-      const by = cl.y + (Math.random() - 0.5) * cl.s * 0.35;
-      const br = cl.s * (0.4 + Math.random() * 0.4);
+      const P = CLOUD_PUFFS[idx][i];
+      const bx = cl.x + P[0] * cl.s * 0.9;
+      const by = cl.y + P[1] * cl.s * 0.35;
+      const br = cl.s * P[2];
       g.beginPath();
       g.arc(bx, by, br, 0, 6.283);
       g.fill();
@@ -1668,7 +1981,7 @@ function drawMinimap(dt) {
   g.beginPath(); g.arc(0, 0, 16, 0, 6.283); g.fill();
 
   g.shadowColor = '#00e0ff';
-  g.shadowBlur = 6;
+  g.shadowBlur = Q.lowfx ? 0 : 6;
   g.fillStyle = '#00e0ff';
   g.strokeStyle = '#ffffff';
   g.lineWidth = 1.2;
@@ -1696,20 +2009,40 @@ function resetCar() {
   car.x = -4; car.z = 0; car.y = 0; car.vy = 0; car.heading = 0;
   car.speed = 0; car.steer = 0; car.airborne = false;
   boost.t = 0;
-  updateChunks(false);
+  updateChunks(true);
   camPos.set(car.x, 4.3, car.z - 9);
   placeCamera(true, 0);
 }
 
 let lastT = performance.now();
+let lastMinimap = 0, skyAccum = 0, hudAccum = 0;
+let fpsFrames = 0, fpsT = performance.now();
+
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.033, Math.max(0.001, (now - lastT) / 1000));
-  lastT = now;
 
-  updateSky(dt);
+  // Settings / pause screen: the world is frozen, so leave the GPU alone.
+  // (The canvas keeps showing its last frame; redraw only if something changed, e.g. rotation or a quality switch.)
+  if (state.playing && state.paused) {
+    if (renderDirty) { renderDirty = false; renderer.render(scene, camera); }
+    return;
+  }
 
-  if (state.playing && !state.paused) {
+  // Frame cap with drift-free pacing (a plain "elapsed < interval" check makes 60Hz screens stutter between 30 and 20 fps).
+  const elapsed = now - lastT;
+  const interval = Q.frameIntervalMs;
+  if (interval && elapsed < interval - 1.5) return;
+  lastT = (interval && elapsed >= interval) ? now - (elapsed % interval) : now;
+  const dt = Math.min(0.033, Math.max(0.001, elapsed / 1000));
+
+  if (Q.skyIntervalMs) {
+    skyAccum += dt;
+    if (skyAccum * 1000 >= Q.skyIntervalMs) { updateSky(skyAccum); skyAccum = 0; }
+  } else {
+    updateSky(dt);
+  }
+
+  if (state.playing) {
     const input = readInput(now);
     stepCar(dt, input);
     let impact = collide();
@@ -1722,15 +2055,18 @@ function frame(now) {
     updatePads(dt);
     placeCamera(false, dt);
     updateAudio(input);
-    updateHUD(input);
-    drawMinimap(dt);
-  } else if (!state.playing) {
+    hudAccum += dt * 1000;
+    if (!Q.hudIntervalMs || hudAccum >= Q.hudIntervalMs) { updateHUD(input); hudAccum = 0; }
+    if (miniVisible && (!Q.minimapIntervalMs || now - lastMinimap >= Q.minimapIntervalMs)) {
+      drawMinimap(dt);
+      lastMinimap = now;
+    }
+  } else {
     const a = now / 4000;
     camera.position.set(Math.sin(a) * 11, 3.6, Math.cos(a) * 11);
     camera.lookAt(0, 1, 0);
     updateTraffic(dt);
   }
-  // else: playing but paused (settings open) - freeze the scene, render as-is
 
   ground.position.x = Math.round(car.x / GRASS_TILE) * GRASS_TILE;
   ground.position.z = Math.round(car.z / GRASS_TILE) * GRASS_TILE;
@@ -1741,6 +2077,13 @@ function frame(now) {
   carMesh.userData.wheels.forEach(function (w) { w.rotation.x += spin; });
 
   renderer.render(scene, camera);
+  renderDirty = false;
+
+  fpsFrames++;
+  if (now - fpsT >= 500) {
+    if (prefs.showFps) $('fpsBadge').textContent = Math.round(fpsFrames * 1000 / (now - fpsT)) + ' FPS';
+    fpsFrames = 0; fpsT = now;
+  }
 }
 
 function beginGame() {
@@ -1748,6 +2091,9 @@ function beginGame() {
   $('hud').style.display = 'block';
   state.playing = true;
   resetCar();
+  lastT = performance.now();
+  renderDirty = true;
+  requestWakeLock();
 }
 
 $('btnKey').addEventListener('click', function () {
@@ -1775,7 +2121,6 @@ $('btnCam').addEventListener('click', async function () {
   }
 });
 
-loadPrefs();
 audio.volume = clamp(prefs.volume / 100, 0, 1);
 audio.muted = !!prefs.muted;
 applySteerSensitivity(prefs.steerSensitivity);
@@ -1784,15 +2129,16 @@ $('auto').checked = prefs.autoAccel;
 $('autoToggleSettings').checked = prefs.autoAccel;
 $('btnSnd').textContent = audio.muted ? '🔇 Sound (M)' : '🔊 Sound (M)';
 
+applyQuality(prefs.quality, true);
+$('fpsBadge').style.display = prefs.showFps ? 'block' : 'none';
 updateChunks(true);
-initTraffic();
 camPos.set(0, 4.3, -9);
 placeCamera(true, 0);
 requestAnimationFrame(frame);
 
 window.__gd = {
   car: car, state: state, boost: boost, stats: stats, sky: sky, traffic: traffic, chunks: chunks, gesture: gesture,
-  audio: audio, keys: keys, analyzeHands: analyzeHands, SETTINGS: SETTINGS,
+  audio: audio, keys: keys, analyzeHands: analyzeHands, SETTINGS: SETTINGS, Q: Q, prefs: prefs, applyQuality: applyQuality,
   pads: function () { return activePads; }, colliders: function () { return colliders; },
   coins: function () { return activeCoins; }, ramps: function () { return activeRamps; }
 };
