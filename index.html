@@ -108,6 +108,37 @@
   button.alt { background: #4b5563; }
   button:disabled { opacity: .5; cursor: wait; }
   #menuMsg { min-height: 22px; font-size: 14px; color: #ffd86b; margin-top: 8px; }
+
+  #btnGear {
+    position: absolute; bottom: 14px; right: 14px; z-index: 5;
+    width: 42px; height: 42px; padding: 0; margin: 0;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 19px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.15);
+    backdrop-filter: blur(4px); cursor: pointer; pointer-events: auto;
+  }
+  #btnGear:hover { background: rgba(0,0,0,.65); }
+  #settingsMenu {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(10,20,35,.6); z-index: 20;
+  }
+  #settingsBox {
+    background: rgba(15,25,40,.94); border-radius: 18px; padding: 26px 32px;
+    width: min(90vw, 420px); max-height: 86vh; overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,.5);
+  }
+  #settingsBox h2 { margin: 0 0 18px; font-size: 24px; text-align: center; }
+  #settingsBox h3 {
+    margin: 18px 0 6px; font-size: 12px; letter-spacing: 1px; text-transform: uppercase;
+    opacity: .55; border-top: 1px solid rgba(255,255,255,.1); padding-top: 14px;
+  }
+  #settingsBox h3:first-of-type { border-top: none; padding-top: 0; }
+  .settingsRow { display: flex; align-items: center; gap: 12px; margin: 12px 0; font-size: 14px; }
+  .settingsRow label { flex: 1.3; opacity: .92; }
+  .settingsRow input[type="range"] { flex: 1.6; accent-color: #2f7df6; }
+  .settingsRow input[type="checkbox"] { width: 18px; height: 18px; accent-color: #2f7df6; }
+  .settingsRow span.val { min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; opacity: .8; font-size: 12px; }
+  #settingsBtns { display: flex; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+  #settingsBtns button { font-size: 14px; padding: 10px 16px; }
 </style>
 </head>
 <body>
@@ -147,6 +178,53 @@
       <canvas id="camOverlay" width="640" height="480"></canvas>
     </div>
     <div id="gstatus">Camera off</div>
+  </div>
+
+  <button id="btnGear" title="Settings (Esc)">⚙️</button>
+</div>
+
+<div id="settingsMenu">
+  <div id="settingsBox">
+    <h2>⚙️ Settings</h2>
+
+    <h3>Sound</h3>
+    <div class="settingsRow">
+      <label for="volSlider">🔊 Master volume</label>
+      <input type="range" id="volSlider" min="0" max="100" value="80">
+      <span class="val" id="volVal">80%</span>
+    </div>
+    <div class="settingsRow">
+      <label for="muteToggle">Mute</label>
+      <input type="checkbox" id="muteToggle">
+    </div>
+
+    <h3>Sensitivity</h3>
+    <div class="settingsRow">
+      <label for="steerSlider">🎮 Steering sensitivity</label>
+      <input type="range" id="steerSlider" min="50" max="200" value="100">
+      <span class="val" id="steerVal">100%</span>
+    </div>
+    <div class="settingsRow">
+      <label for="gestureSlider">✋ Gesture sensitivity</label>
+      <input type="range" id="gestureSlider" min="50" max="200" value="100">
+      <span class="val" id="gestureVal">100%</span>
+    </div>
+
+    <h3>Gameplay</h3>
+    <div class="settingsRow">
+      <label for="autoToggleSettings">🚗 Auto-accelerate</label>
+      <input type="checkbox" id="autoToggleSettings">
+    </div>
+    <div class="settingsRow">
+      <label for="camToggle">📷 Show camera preview</label>
+      <input type="checkbox" id="camToggle" checked>
+    </div>
+
+    <div id="settingsBtns">
+      <button id="btnResume">▶️ Resume</button>
+      <button id="btnRestartCar" class="alt">🔄 Reset car</button>
+      <button id="btnQuitMenu" class="alt">🏠 Main menu</button>
+    </div>
   </div>
 </div>
 
@@ -191,6 +269,53 @@ const SETTINGS = {
   rampBoostSpeed: 18
 };
 
+// Base (100%) values that the sensitivity sliders scale away from.
+const BASE_SETTINGS = {
+  steerFullDeg: SETTINGS.steerFullDeg,
+  turnSpeed: SETTINGS.turnSpeed,
+  fingerRatio: SETTINGS.fingerRatio
+};
+
+const PREFS_KEY = 'gesturedrive_prefs_v1';
+const prefs = {
+  volume: 80,            // 0-100
+  muted: false,
+  steerSensitivity: 100, // 50-200 %, higher = less hand tilt needed to steer
+  gestureSensitivity: 100, // 50-200 %, higher = easier to trigger gas/brake
+  autoAccel: false,
+  showCam: true
+};
+
+function loadPrefs() {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    Object.assign(prefs, saved);
+  } catch (e) { /* ignore bad/missing storage */ }
+}
+function savePrefs() {
+  try {
+    prefs.volume = Math.round((audio.muted ? prefs.volume : audio.volume * 100));
+    prefs.muted = audio.muted;
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch (e) { /* storage unavailable, ignore */ }
+}
+
+function applySteerSensitivity(pct) {
+  prefs.steerSensitivity = pct;
+  const factor = pct / 100;
+  SETTINGS.steerFullDeg = clamp(BASE_SETTINGS.steerFullDeg / factor, 12, 80);
+  SETTINGS.turnSpeed = BASE_SETTINGS.turnSpeed * factor;
+  savePrefs();
+}
+function applyGestureSensitivity(pct) {
+  prefs.gestureSensitivity = pct;
+  const factor = pct / 100;
+  SETTINGS.fingerRatio = clamp(BASE_SETTINGS.fingerRatio / factor, 1.05, 3);
+  savePrefs();
+}
+
 const MEDIAPIPE_VERSION = '0.10.21';
 const MEDIAPIPE_JS   = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MEDIAPIPE_VERSION + '/vision_bundle.mjs';
 const MEDIAPIPE_WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + MEDIAPIPE_VERSION + '/wasm';
@@ -198,7 +323,7 @@ const HAND_MODEL     = 'https://storage.googleapis.com/mediapipe-models/hand_lan
 
 const $ = function (id) { return document.getElementById(id); };
 const clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
-const state = { playing: false };
+const state = { playing: false, paused: false };
 const keys = {};
 
 const canvas = $('game');
@@ -780,7 +905,7 @@ function collideTraffic() {
   return impact;
 }
 
-const audio = { ctx: null, master: null, muted: false, noise: null, eng: null, skid: null, wind: null, horn: null };
+const audio = { ctx: null, master: null, muted: false, volume: 0.8, noise: null, eng: null, skid: null, wind: null, horn: null };
 
 function initAudio() {
   if (audio.ctx) { if (audio.ctx.resume) audio.ctx.resume(); return; }
@@ -790,7 +915,7 @@ function initAudio() {
     const ctx = new AC();
     audio.ctx = ctx;
     audio.master = ctx.createGain();
-    audio.master.gain.value = audio.muted ? 0 : 0.8;
+    audio.master.gain.value = audio.muted ? 0 : audio.volume;
     audio.master.connect(ctx.destination);
     const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const data = nb.getChannelData(0);
@@ -825,8 +950,15 @@ function initAudio() {
 }
 function setMuted(m) {
   audio.muted = m;
-  if (audio.master) audio.master.gain.setTargetAtTime(m ? 0 : 0.8, audio.ctx.currentTime, 0.03);
+  if (audio.master) audio.master.gain.setTargetAtTime(m ? 0 : audio.volume, audio.ctx.currentTime, 0.03);
   $('btnSnd').textContent = m ? '🔇 Sound (M)' : '🔊 Sound (M)';
+  $('muteToggle').checked = m;
+  savePrefs();
+}
+function setVolume(v) {
+  audio.volume = clamp(v, 0, 1);
+  if (audio.master && !audio.muted) audio.master.gain.setTargetAtTime(audio.volume, audio.ctx.currentTime, 0.03);
+  savePrefs();
 }
 function noiseBurst(dur, freq, type, vol, sweepTo) {
   if (!audio.ctx || audio.muted) return;
@@ -1187,9 +1319,82 @@ window.addEventListener('keydown', function (e) {
     if (!document.fullscreenElement) { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); }
     else if (document.exitFullscreen) document.exitFullscreen();
   }
+  if (e.code === 'Escape' && state.playing) {
+    if (state.paused) closeSettings(); else openSettings();
+  }
 });
 window.addEventListener('keyup', function (e) { keys[e.code] = false; });
 $('btnSnd').addEventListener('click', function () { setMuted(!audio.muted); });
+
+function syncSettingsUI() {
+  $('volSlider').value = Math.round(audio.volume * 100);
+  $('volVal').textContent = Math.round(audio.volume * 100) + '%';
+  $('muteToggle').checked = audio.muted;
+  $('steerSlider').value = prefs.steerSensitivity;
+  $('steerVal').textContent = prefs.steerSensitivity + '%';
+  $('gestureSlider').value = prefs.gestureSensitivity;
+  $('gestureVal').textContent = prefs.gestureSensitivity + '%';
+  $('autoToggleSettings').checked = prefs.autoAccel;
+  $('auto').checked = prefs.autoAccel;
+  $('camToggle').checked = prefs.showCam;
+}
+function openSettings() {
+  if (!state.playing) return;
+  state.paused = true;
+  syncSettingsUI();
+  $('settingsMenu').style.display = 'flex';
+}
+function closeSettings() {
+  $('settingsMenu').style.display = 'none';
+  state.paused = false;
+}
+
+$('btnGear').addEventListener('click', function () {
+  if (state.paused) closeSettings(); else openSettings();
+});
+$('btnResume').addEventListener('click', closeSettings);
+$('btnRestartCar').addEventListener('click', function () { resetCar(); closeSettings(); });
+$('btnQuitMenu').addEventListener('click', function () {
+  closeSettings();
+  state.playing = false;
+  $('hud').style.display = 'none';
+  $('menu').style.display = 'flex';
+  $('menuMsg').textContent = '';
+});
+
+$('volSlider').addEventListener('input', function () {
+  const pct = Number(this.value);
+  $('volVal').textContent = pct + '%';
+  setVolume(pct / 100);
+  if (pct > 0 && audio.muted) setMuted(false);
+});
+$('muteToggle').addEventListener('change', function () { setMuted(this.checked); });
+
+$('steerSlider').addEventListener('input', function () {
+  const pct = Number(this.value);
+  $('steerVal').textContent = pct + '%';
+  applySteerSensitivity(pct);
+});
+$('gestureSlider').addEventListener('input', function () {
+  const pct = Number(this.value);
+  $('gestureVal').textContent = pct + '%';
+  applyGestureSensitivity(pct);
+});
+
+function setAutoAccel(v) {
+  prefs.autoAccel = v;
+  $('auto').checked = v;
+  $('autoToggleSettings').checked = v;
+  savePrefs();
+}
+$('autoToggleSettings').addEventListener('change', function () { setAutoAccel(this.checked); });
+$('auto').addEventListener('change', function () { setAutoAccel(this.checked); });
+
+$('camToggle').addEventListener('change', function () {
+  prefs.showCam = this.checked;
+  $('bottomLeft').style.display = this.checked ? '' : 'none';
+  savePrefs();
+});
 
 function readInput(now) {
   updateGesture(now);
@@ -1504,7 +1709,7 @@ function frame(now) {
 
   updateSky(dt);
 
-  if (state.playing) {
+  if (state.playing && !state.paused) {
     const input = readInput(now);
     stepCar(dt, input);
     let impact = collide();
@@ -1519,12 +1724,13 @@ function frame(now) {
     updateAudio(input);
     updateHUD(input);
     drawMinimap(dt);
-  } else {
+  } else if (!state.playing) {
     const a = now / 4000;
     camera.position.set(Math.sin(a) * 11, 3.6, Math.cos(a) * 11);
     camera.lookAt(0, 1, 0);
     updateTraffic(dt);
   }
+  // else: playing but paused (settings open) - freeze the scene, render as-is
 
   ground.position.x = Math.round(car.x / GRASS_TILE) * GRASS_TILE;
   ground.position.z = Math.round(car.z / GRASS_TILE) * GRASS_TILE;
@@ -1552,10 +1758,12 @@ $('btnKey').addEventListener('click', function () {
 
 $('btnCam').addEventListener('click', async function () {
   initAudio();
+  if (gesture.on) { $('bottomLeft').style.display = prefs.showCam ? '' : 'none'; beginGame(); return; }
   const msg = $('menuMsg');
   $('btnCam').disabled = true; $('btnKey').disabled = true;
   try {
     await startHandTracking(function (t) { msg.textContent = t; });
+    $('bottomLeft').style.display = prefs.showCam ? '' : 'none';
     beginGame();
   } catch (err) {
     console.error(err);
@@ -1566,6 +1774,15 @@ $('btnCam').addEventListener('click', async function () {
     $('btnCam').disabled = false; $('btnKey').disabled = false;
   }
 });
+
+loadPrefs();
+audio.volume = clamp(prefs.volume / 100, 0, 1);
+audio.muted = !!prefs.muted;
+applySteerSensitivity(prefs.steerSensitivity);
+applyGestureSensitivity(prefs.gestureSensitivity);
+$('auto').checked = prefs.autoAccel;
+$('autoToggleSettings').checked = prefs.autoAccel;
+$('btnSnd').textContent = audio.muted ? '🔇 Sound (M)' : '🔊 Sound (M)';
 
 updateChunks(true);
 initTraffic();
