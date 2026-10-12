@@ -168,6 +168,14 @@ body.lowfx .glass, body.lowfx #btnGear { backdrop-filter: none; -webkit-backdrop
 .toast { padding: 8px 18px; border-radius: 999px; background: rgba(12,14,28,.86); border: 1px solid var(--line); font: 700 17px var(--ui); color: #fff; animation: toastIn 2.2s ease forwards; }
 .toast b { color: var(--sun); }
 @keyframes toastIn { 0% { opacity: 0; transform: translateY(-10px) scale(.9); } 10% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+.toast.cheat { background: linear-gradient(135deg, rgba(40,28,8,.92), rgba(18,14,10,.92)); border-color: var(--sun); color: var(--sun); box-shadow: 0 0 0 1px rgba(255,200,61,.25), 0 0 22px rgba(255,200,61,.45); animation: cheatIn 3s ease forwards; letter-spacing: .3px; }
+.toast.cheat b { color: #fff; }
+@keyframes cheatIn { 0% { opacity: 0; transform: translateY(-10px) scale(.85); } 8% { opacity: 1; transform: none; } 14% { transform: scale(1.04); } 20% { transform: scale(1); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+#photoBar { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(14px); display: flex; align-items: center; gap: 10px; padding: 9px 18px; border-radius: 999px; background: rgba(10,12,24,.74); border: 1px solid var(--line); backdrop-filter: blur(10px); font: 600 14px var(--ui); color: var(--text); opacity: 0; pointer-events: none; transition: opacity .25s ease, transform .25s ease; z-index: 25; }
+#photoBar.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+#photoBar .sep { color: var(--dim); }
+#photoBar kbd { display: inline-block; padding: 2px 7px; border-radius: 6px; background: rgba(255,255,255,.14); border: 1px solid var(--line); font: 700 12px var(--ui); color: var(--sun); }
 
 /* ============================== SETTINGS ============================== */
 #settingsMenu { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(8,9,20,.62); z-index: 20; }

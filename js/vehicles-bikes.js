@@ -72,7 +72,7 @@ function bikeAnimate(root, s) {
   for (let i = 0; i < Ls.head.length; i++) Ls.head[i].emissiveIntensity = 0.9 + s.night * 2.6;
   for (let i = 0; i < Ls.tail.length; i++) Ls.tail[i].emissiveIntensity = 0.6 + s.night * 0.9 + (s.brake > 0 ? 2.6 : 0);
   if (ud.glow) ud.glow.material.opacity = 0.2 + s.night * 0.6;
-  for (let i = 0; i < ud.flames.length; i++) { const f = ud.flames[i]; f.visible = !!s.boost; if (s.boost) f.scale.set(1, 1, 0.8 + Math.random() * 0.6); }
+  for (let i = 0; i < ud.flames.length; i++) { const f = ud.flames[i], bv = s.boost || 0; f.visible = bv > 0.02; if (f.visible) f.scale.set(1, 1, Math.max(0.12, (0.75 + Math.random() * 0.5) * Math.min(1, bv * 1.4))); }
 }
 
 /* shared sport-bike body: tank, seat, tail, fairing (used by Blade and Ghost) */

@@ -160,9 +160,12 @@ function carAnimate(root, s) {
   for (let i = 0; i < L.rev.length; i++) L.rev[i].emissiveIntensity = sp < -0.5 ? 2.2 : 0.04;
   if (ud.glow) ud.glow.material.opacity = 0.2 + s.night * 0.6;
   for (let i = 0; i < ud.flames.length; i++) {
-    const f = ud.flames[i];
-    f.visible = !!s.boost;
-    if (s.boost) { const k = 0.8 + Math.random() * 0.6; f.scale.set(1, 1, k); f.material.opacity = 0.7 + Math.random() * 0.3; }
+    const f = ud.flames[i], bv = s.boost || 0;
+    f.visible = bv > 0.02;
+    if (f.visible) {
+      const k = (0.55 + Math.random() * 0.5) * Math.min(1, bv * 1.4);
+      f.scale.set(1, 1, Math.max(0.12, k)); f.material.opacity = (0.55 + Math.random() * 0.3) * Math.min(1, bv * 1.6);
+    }
   }
 }
 K.animateVehicle = function (root, s) { root.userData.animate(root, s); };

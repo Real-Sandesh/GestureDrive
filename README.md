@@ -177,4 +177,76 @@ Progress is stored in `localStorage` under `gesturedrive_save_v1` (clear it to s
 ## Controls
 
 Camera: both hands up like a wheel to steer, right index finger up = gas, left index finger up = brake/reverse.
-Keyboard: W/A/S/D or arrows, Space = brake. R reset, G garage, C camera preview, H horn, M mute, Z minimap zoom, F fullscreen, Esc pause.
+Keyboard: W/A/S/D or arrows, Space = brake, Shift = nitro boost. R reset, G garage, C camera preview, H horn, M mute,
+Z minimap zoom, F fullscreen, P photo mode, Esc pause/exit.
+
+While driving, typing a vehicle's name (its id works too, e.g. `comet`, `spectre`, `ghost`) instantly unlocks and
+selects it, GTA-style - just start typing, there's no dedicated "enter cheat" key. A few bonus words also work:
+`GIVEMECASH` (+5000 coins), `UNLOCKALL` (every vehicle), `NIGHTTIME` / `DAYTIME` (snap the sky). The buffer clears
+itself after a couple of seconds of not typing.
+
+## Changelog - Phase 2 hotfix: broken rendering & camera feel
+
+Two bugs got through the first Phase 2 pass and made it into your hands - sorry about that.
+Both are fixed now:
+
+- **Buildings/world rendering glitchy, "half gone."** The bloom effect renders the scene into
+  an off-screen buffer before compositing it back, and that buffer was accidentally created
+  *without a depth buffer* (an argument-order mistake - the option that was supposed to turn
+  it on got immediately overwritten back off). With no depth buffer, the GPU has no way to
+  know which surface is in front of which, so buildings, roads and everything else could draw
+  in the wrong order - exactly the "glitchy / half gone" look. Fixed; verified by driving
+  through dense parts of the city at high quality (where overlapping geometry would have
+  shown it worst) and confirming everything draws correctly.
+- **Driving felt unsmooth, couldn't drift.** The camera-smoothing pass added a slight lag and
+  a sideways lean to *where the camera looks*, not just where it sits. That's exactly the cue
+  you read to judge the car's heading mid-drift, so lagging or skewing it made the car feel
+  disconnected from the view. The look direction is back to tracking the car's heading
+  instantly, with zero lag and zero lean - identical to how it worked before Phase 2. The
+  camera's *position* still trails smoothly (unchanged from before) and the crash-shake wander
+  is still smoothed (that part never touched steering feel), so the improvements that didn't
+  hurt control are kept.
+
+## Changelog - Phase 2: cheats, camera, photo mode & visuals
+
+- **Cheat codes.** GTA-style: type a vehicle's name or id while driving and it unlocks and
+  becomes your ride immediately, with a distinct amber "cheat activated" toast. A handful of
+  bonus words are included too (see Controls above). Typing shares the keyboard with a few
+  existing single-letter shortcuts (R/G/Z/C/F/M/P) - a bare tap of one of those still fires
+  it normally, but once you're partway through typing a word, those letters are claimed by
+  the cheat buffer instead so e.g. typing "SPECTRE" is never interrupted by the P (photo
+  mode) shortcut firing on the P in the middle. The one exception: starting completely fresh
+  with "G" (for "GHOST" or "GIVEMECASH") gets a short grace window before the garage
+  shortcut fires, so it doesn't pop open mid-word either.
+- **Smoother camera.** The chase camera now eases toward a look-ahead point instead of
+  snapping to it every frame, leans slightly into turns based on your steering, and the
+  crash-shake is a smoothed wander instead of raw per-frame jitter - it reads as a handheld
+  wobble rather than static noise.
+- **Photo mode (P).** Freezes the car and the world, and gives you a free-look orbit camera
+  - drag to look around, scroll to zoom, S to save a PNG, P or Esc to exit. A hint bar at the
+  bottom shows the controls while it's active.
+- **Bloom.** Bright lights (headlights, taillights, neon window glow, boost pads) now bloom
+  softly, most noticeable at night. Three-pass, dependency-free (threshold → blur → add
+  back), scaled to quality: off on Low, a light pass on Medium, a fuller one on High.
+- **City shopfronts.** About half of the taller city buildings now get a bright ground-floor
+  band and awning, so street level reads as storefronts rather than a plain tower base.
+- Your own ramp-removal and Shift-nitro changes from the last upload are untouched and still
+  the base this phase was built on - this round didn't touch ramp or boost logic at all.
+
+## Changelog - Phase 1: ramp & boost fixes
+
+- **Ramps rebuilt.** The guard rails used to be a plain floating box sized independently of
+  the slope, which from a distance read as a solid black wall. They're now generated so the
+  rail's bottom edge is mathematically the same line as the ramp's own slope, tapering from
+  a low kerb at the base to a proper guard height at the lip - no floating geometry, no gap.
+  Brighter rail colour, white chevrons, a red boost strip and amber lamps (lit at night).
+- **Ramps moved off the road.** They now sit on the grass shoulder beside the road, reached
+  by a short paved peel-off lane with a painted hazard stripe, so through traffic is never
+  blocked and there's nothing in the middle of a driving lane to swerve around.
+- **Ramps are now solid.** Hitting one from the side or the back stops the car like a real
+  obstacle instead of letting it clip through; riding it properly (lined up, from the low
+  end) still works exactly as before. The same fix (solid-but-not-tunnelable collision)
+  already covered buildings; ramps now use the same system.
+- **Boost smoothed out.** The blue speed pad no longer snaps your speed up instantly - it
+  now eases in over about a second, same peak speed, no jolt. The exhaust-flame effect and
+  the camera's speed-kick now fade in and out instead of switching on/off like a light switch.
